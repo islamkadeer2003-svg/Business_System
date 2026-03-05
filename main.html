@@ -281,20 +281,12 @@ svg text{font-family:'Plus Jakarta Sans',sans-serif}
 // Go to https://console.firebase.google.com → Create project → Add web app
 // Enable Authentication (Email/Password + Google) and Firestore Database.
 const FIREBASE_CONFIG = {
- apiKey: "AIzaSyDkWhy03TQHG0DEo6qcpz5mDHiMwjg2jyM",
-
-  authDomain: "shopos-b5810.firebaseapp.com",
-
-  projectId: "shopos-b5810",
-
-  storageBucket: "shopos-b5810.firebasestorage.app",
-
-  messagingSenderId: "809243252630",
-
-  appId: "1:809243252630:web:5be24f83eafd203428afb7",
-
-  measurementId: "G-6Y8N0JZ2TV"
-
+  apiKey: "AIzaSyDemo-ReplaceWithYourOwnFirebaseKey",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "000000000000",
+  appId: "1:000000000000:web:0000000000000000"
 };
 
 let firebaseReady = false;
@@ -1115,7 +1107,68 @@ function filterSalesModal(){
 // INVENTORY PAGE
 // ═══════════════════════════════════════════════════════════
 let iSearch='',iFilter='all';
-const CATS=['Panjabi','Shirt','Shalwar Kameez','Jeans','T-Shirt','Kurti','Lehenga','Ganji','Dupatta','Saree','Other'];
+const DEFAULT_CATS=['Panjabi','Shirt','Shalwar Kameez','Jeans','T-Shirt','Kurti','Lehenga','Ganji','Dupatta','Saree','Other'];
+function getCATS(){return DB.settings.categories&&DB.settings.categories.length?DB.settings.categories:DEFAULT_CATS;}
+function openManageCategories(){
+  function renderCatList(){
+    const cats=getCATS();
+    return cats.map((c,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;font-size:13px;font-weight:600">${c}</div>
+      <button onclick="renameCategory(${i})" style="padding:4px 8px;border-radius:7px;border:1px solid var(--border);background:rgba(59,130,246,.15);color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">✏️ Rename</button>
+      <button onclick="deleteCategory(${i})" style="padding:4px 8px;border-radius:7px;border:1px solid var(--border);background:rgba(239,68,68,.15);color:var(--red);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">🗑️</button>
+    </div>`).join('');
+  }
+  showModal('Manage Categories',`
+    <div id="cat-list">${renderCatList()}</div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <input id="new-cat-inp" placeholder="New category name..." style="flex:1">
+      <button onclick="addCategory()" style="padding:10px 14px;border-radius:9px;border:none;background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ Add</button>
+    </div>
+    <div style="font-size:10px;color:var(--faint);margin-top:8px">Default categories are kept as a base. Changes are saved immediately.</div>
+  `);
+}
+function addCategory(){
+  const inp=document.getElementById('new-cat-inp');
+  const val=inp.value.trim();
+  if(!val){showToast('Enter a category name','var(--red)');return;}
+  if(!DB.settings.categories)DB.settings.categories=[...DEFAULT_CATS];
+  if(DB.settings.categories.includes(val)){showToast('Already exists','var(--amber)');return;}
+  DB.settings.categories.push(val);
+  save();inp.value='';
+  document.getElementById('cat-list').innerHTML=refreshCatList();
+  showToast('✅ Category added');
+}
+function deleteCategory(i){
+  if(!DB.settings.categories)DB.settings.categories=[...DEFAULT_CATS];
+  const cat=DB.settings.categories[i];
+  const inUse=DB.products.some(p=>p.category===cat);
+  if(inUse&&!confirm(`"${cat}" is used by some products. Delete anyway? (Products keep the name)`))return;
+  DB.settings.categories.splice(i,1);
+  save();
+  document.getElementById('cat-list').innerHTML=refreshCatList();
+  showToast('🗑️ Category removed','var(--red)');
+}
+function renameCategory(i){
+  if(!DB.settings.categories)DB.settings.categories=[...DEFAULT_CATS];
+  const oldName=DB.settings.categories[i];
+  const newName=prompt(`Rename "${oldName}" to:`,oldName);
+  if(!newName||newName.trim()===oldName)return;
+  const trimmed=newName.trim();
+  // Update all products using this category
+  DB.products.forEach(p=>{if(p.category===oldName)p.category=trimmed;});
+  DB.settings.categories[i]=trimmed;
+  save();
+  document.getElementById('cat-list').innerHTML=refreshCatList();
+  showToast('✅ Category renamed');
+}
+function refreshCatList(){
+  const cats=getCATS();
+  return cats.map((c,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+    <div style="flex:1;font-size:13px;font-weight:600">${c}</div>
+    <button onclick="renameCategory(${i})" style="padding:4px 8px;border-radius:7px;border:1px solid var(--border);background:rgba(59,130,246,.15);color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">✏️ Rename</button>
+    <button onclick="deleteCategory(${i})" style="padding:4px 8px;border-radius:7px;border:1px solid var(--border);background:rgba(239,68,68,.15);color:var(--red);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">🗑️</button>
+  </div>`).join('');
+}
 
 function renderInv(){
   const pg=document.getElementById('page-inv');
@@ -1195,7 +1248,7 @@ function openEditProd(id){const p=DB.products.find(x=>x.id===id);if(p)showModal(
 function prodForm(p){
   return`
   <div class="field"><label>Product Name *</label><input id="fn" value="${p?.name||''}" placeholder="e.g. Panjabi - White (L)"></div>
-  <div class="r2"><div class="field"><label>Category</label><select id="fc"><option value="">Select...</option>${CATS.map(c=>`<option ${p?.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
+  <div class="r2"><div class="field"><label>Category</label><select id="fc"><option value="">Select...</option>${getCATS().map(c=>`<option ${p?.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
   <div class="field"><label>SKU</label><input id="fk" value="${p?.sku||''}" placeholder="Auto"></div></div>
   <div class="field"><label>Buy / Cost Price (৳) *</label><input id="fp" type="number" value="${p?.costPrice||''}" placeholder="What you paid supplier"></div>
   <div class="r2"><div class="field"><label>Current Stock</label><input id="fs" type="number" value="${p?.stock||0}"></div>
@@ -1829,7 +1882,9 @@ function openSettings(){
     <div class="field"><label>Owner Name</label><input id="so" value="${s.owner||''}"></div>
     <div class="field"><label>Phone</label><input id="sp" value="${s.phone||''}"></div>
     <div style="height:1px;background:var(--border);margin:12px 0"></div>
-    <button onclick="resetAll()" style="width:100%;padding:11px;border-radius:9px;border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🗑️ Reset All Data (Fresh Start)</button>`,
+    <button onclick="resetAll()" style="width:100%;padding:11px;border-radius:9px;border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🗑️ Reset All Data (Fresh Start)</button>
+    <div style="height:1px;background:var(--border);margin:12px 0"></div>
+    <button onclick="closeModal();openManageCategories()" style="width:100%;padding:11px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🏷️ Manage Categories</button>`,
   ()=>{
     DB.settings.shopName=document.getElementById('sn').value.trim()||'My Boutique';
     DB.settings.owner=document.getElementById('so').value.trim();

@@ -1030,7 +1030,7 @@ function onSellSearch(inp){
   // Re-focus search and restore value after re-render
   const si=document.getElementById('sell-search-inp');
   if(si){si.value=sSearch;si.focus();si.setSelectionRange(si.value.length,si.value.length);}
-}
+
 function cQty(pid,d){
   const ci=cart.find(c=>c.id===pid);if(!ci)return;
   const p=DB.products.find(x=>x.id===pid);

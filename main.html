@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#0f172a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="BoutiqueOS">
-<title>BoutiqueOS — Complete Retail Intelligence</title>
+<meta name="apple-mobile-web-app-title" content="Shop System">
+<title>Shop System — Complete Retail Intelligence</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -210,7 +210,7 @@ svg text{font-family:'Plus Jakarta Sans',sans-serif}
 <!-- LOGIN SCREEN -->
 <div id="login-screen">
   <div class="login-logo">🏪</div>
-  <div class="login-title">BoutiqueOS</div>
+  <div class="login-title">Shop System</div>
   <div class="login-sub">Your retail intelligence, synced everywhere</div>
   <div class="login-box">
     <h3 id="login-mode-title">Sign In</h3>
@@ -234,7 +234,7 @@ svg text{font-family:'Plus Jakarta Sans',sans-serif}
   <div class="hdr-row">
     <div class="hdr-brand">
       <div class="hdr-logo">🏪</div>
-      <div><div class="hdr-name">BoutiqueOS</div><div class="hdr-shop" id="hShop">Loading...</div></div>
+      <div><div class="hdr-name">Shop System</div><div class="hdr-shop" id="hShop">Loading...</div></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <div class="hdr-stats">
@@ -255,6 +255,7 @@ svg text{font-family:'Plus Jakarta Sans',sans-serif}
 <div class="page" id="page-predict"></div>
 <div class="page" id="page-overhead"></div>
 <div class="page" id="page-reports"></div>
+<div class="page" id="page-history"></div>
 
 <!-- BOTTOM NAV -->
 <nav class="bnav">
@@ -265,6 +266,7 @@ svg text{font-family:'Plus Jakarta Sans',sans-serif}
   <button class="nb" onclick="NAV('predict')"><span class="ni">🔮</span><span>Predict</span></button>
   <button class="nb" onclick="NAV('overhead')"><span class="ni">🏭</span><span>Costs</span></button>
   <button class="nb" onclick="NAV('reports')"><span class="ni">📋</span><span>Reports</span></button>
+  <button class="nb" onclick="NAV('history')"><span class="ni">📅</span><span>History</span></button>
 </nav>
 
 <!-- MODAL -->
@@ -294,6 +296,7 @@ const FIREBASE_CONFIG = {
   appId: "1:809243252630:web:5be24f83eafd203428afb7",
 
   measurementId: "G-6Y8N0JZ2TV"
+
 
 };
 
@@ -705,12 +708,12 @@ function heatmap(data,rowLabels,colLabels,title=''){
 // ═══════════════════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════════════════
-const TABS=['dash','sell','inv','intel','predict','overhead','reports'];
+const TABS=['dash','sell','inv','intel','predict','overhead','reports','history'];
 function NAV(tab){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nb').forEach((b,i)=>b.classList.toggle('active',TABS[i]===tab));
   document.getElementById('page-'+tab).classList.add('active');
-  const renders={dash:renderDash,sell:renderSell,inv:renderInv,intel:renderIntel,predict:renderPredict,overhead:renderOverhead,reports:renderReports};
+  const renders={dash:renderDash,sell:renderSell,inv:renderInv,intel:renderIntel,predict:renderPredict,overhead:renderOverhead,reports:renderReports,history:renderHistory};
   renders[tab]&&renders[tab]();
   updateHeader();
 }
@@ -902,9 +905,9 @@ function renderSell(){
   <div style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:10px;padding:8px 12px;font-size:12px;color:#93c5fd;margin-bottom:2px">
     💡 <strong>Bargain mode:</strong> Change the price for each item below
   </div>
-  <input type="text" placeholder="🔍 Search products..." value="${sSearch}" oninput="sSearch=this.value;renderSell()" style="margin-bottom:2px">
+  <input type="text" id="sell-search-inp" placeholder="🔍 Search products..." value="${sSearch}" oninput="onSellSearch(this)" style="margin-bottom:2px">
 
-  ${results.length?`<div style="background:var(--surface);border-radius:10px;border:1px solid var(--border);overflow:hidden;margin-bottom:2px">
+  ${results.length?`<div id="sell-results" style="background:var(--surface);border-radius:10px;border:1px solid var(--border);overflow:hidden;margin-bottom:2px">
     ${results.map(p=>{
       const v=velocity(p.id);
       return`<div style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center" onclick="addCart('${p.id}')">
@@ -914,8 +917,7 @@ function renderSell(){
         </div>
         <div style="font-size:12px;font-weight:700;color:var(--green)">${fmt(p.costPrice)}</div>
       </div>`;}).join('')}
-  </div>`:''}
-
+  </div>`:`<div id="sell-results" style="display:none"></div>`}
   ${cart.length?`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:13px;font-weight:700">🛒 Cart <span style="color:var(--muted);font-weight:400">(${cart.length} items)</span></div>
@@ -974,13 +976,36 @@ function renderSell(){
   </div>`;
 }
 
-function addCart(pid){
+function onSellSearch(inp){
+  sSearch=inp.value;
+  // Update only the search results portion without full re-render (preserves focus)
+  const results=sSearch?DB.products.filter(p=>p.stock>0&&(p.name.toLowerCase().includes(sSearch.toLowerCase())||p.sku.toLowerCase().includes(sSearch.toLowerCase()))).slice(0,6):[];
+  let sr=document.getElementById('sell-results');
+  if(!sr){renderSell();return;}
+  if(results.length){
+    sr.style.display='';
+    sr.innerHTML=results.map(p=>{
+      const v=velocity(p.id);
+      return`<div style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center" onclick="addCart('${p.id}')">
+        <div>
+          <div style="font-size:13px;font-weight:600">${p.name}</div>
+          <div style="font-size:10px;color:var(--faint)">Buy: ${fmt(p.costPrice)} • Stock: ${p.stock} • ${v.toFixed(2)}/day</div>
+        </div>
+        <div style="font-size:12px;font-weight:700;color:var(--green)">${fmt(p.costPrice)}</div>
+      </div>`;}).join('');
+  }else{
+    sr.style.display='none';sr.innerHTML='';
+  }
+}
   const p=DB.products.find(x=>x.id===pid);if(!p)return;
   const ex=cart.find(c=>c.id===pid);
   if(ex){if(ex.qty>=p.stock){showToast('⚠️ Stock limit','var(--amber)');return;}ex.qty++;}
   else cart.push({...p,qty:1,sp:p.costPrice});
-  sSearch='';renderSell();
-}
+  renderSell();
+  // Re-focus search and restore value after re-render
+  const si=document.getElementById('sell-search-inp');
+  if(si){si.value=sSearch;si.focus();si.setSelectionRange(si.value.length,si.value.length);}
+
 function cQty(pid,d){
   const ci=cart.find(c=>c.id===pid);if(!ci)return;
   const p=DB.products.find(x=>x.id===pid);
@@ -1909,7 +1934,7 @@ function resetAll(){
 function exportData(){
   const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download=`boutique-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();
+  a.download=`shop-system-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();
   showToast('✅ Backup exported!');
 }
 
@@ -1942,6 +1967,355 @@ function closeModal(){document.getElementById('modal').classList.remove('open');
 function showToast(msg,bg='var(--green)'){
   const t=document.getElementById('toast');t.textContent=msg;t.style.background=bg==='var(--green)'?'#10b981':bg==='var(--red)'?'#ef4444':bg==='var(--amber)'?'#f59e0b':'#10b981';
   t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+// ═══════════════════════════════════════════════════════════
+// HISTORY PAGE — Calendar View
+// ═══════════════════════════════════════════════════════════
+let histView='month'; // 'year'|'month'|'week'|'day'
+let histYear=new Date().getFullYear();
+let histMonth=new Date().getMonth(); // 0-based
+let histWeekStart=null; // Date of Monday of selected week
+let histDay=null; // 'YYYY-MM-DD'
+
+function renderHistory(){
+  const pg=document.getElementById('page-history');
+  pg.innerHTML=`
+  <style>
+    .cal-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .cal-nav button{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+    .cal-nav .cal-title{font-size:14px;font-weight:800;color:var(--text)}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:6px}
+    .cal-dow{text-align:center;font-size:9px;font-weight:700;color:var(--faint);padding:4px 0;text-transform:uppercase}
+    .cal-day{border-radius:8px;padding:4px 2px;min-height:46px;cursor:pointer;border:1px solid transparent;transition:all .15s;position:relative;display:flex;flex-direction:column;align-items:center}
+    .cal-day:active{transform:scale(.95)}
+    .cal-day.has-sales{border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.08)}
+    .cal-day.today{border-color:var(--blue)!important;background:rgba(59,130,246,.12)!important}
+    .cal-day.selected{border-color:var(--green)!important;background:rgba(16,185,129,.2)!important}
+    .cal-day.empty{opacity:0;pointer-events:none}
+    .cal-dn{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:2px}
+    .cal-day.has-sales .cal-dn{color:var(--text)}
+    .cal-day.today .cal-dn{color:var(--blue)}
+    .cal-rev{font-size:8px;font-weight:700;color:var(--green);white-space:nowrap}
+    .cal-dot{width:4px;height:4px;border-radius:50%;background:var(--green);margin-top:1px}
+    .week-row{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px}
+    .week-cell{border-radius:8px;padding:6px 4px;cursor:pointer;border:1px solid transparent;transition:all .15s;text-align:center}
+    .week-cell.has-sales{border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.08)}
+    .week-cell.today{border-color:var(--blue);background:rgba(59,130,246,.12)}
+    .week-cell.selected{border-color:var(--green);background:rgba(16,185,129,.2)}
+    .year-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .month-cell{background:var(--surface2);border-radius:10px;padding:10px 8px;text-align:center;cursor:pointer;border:1px solid var(--border);transition:all .2s}
+    .month-cell:active{transform:scale(.96)}
+    .month-cell.has-sales{border-color:rgba(16,185,129,.4)}
+    .month-cell.current{border-color:var(--blue)}
+    .month-cell.selected{border-color:var(--green);background:rgba(16,185,129,.15)}
+    .month-cell .mc-name{font-size:12px;font-weight:700;color:var(--text)}
+    .month-cell .mc-rev{font-size:10px;color:var(--green);font-weight:700;margin-top:3px}
+    .month-cell .mc-txn{font-size:9px;color:var(--faint)}
+    .stat-section{margin-top:8px}
+    .stat-sep{height:1px;background:var(--border);margin:12px 0}
+  </style>
+  <div class="ptabs" style="margin-bottom:10px">
+    ${[['year','📆 Year'],['month','📅 Month'],['week','🗓 Week'],['day','📋 Day']].map(([v,l])=>
+      `<button class="ptab ${histView===v?'active':''}" onclick="histView='${v}';renderHistory()">${l}</button>`).join('')}
+  </div>
+  <div id="hist-calendar"></div>
+  <div id="hist-day-stats"></div>`;
+  renderHistCalendar();
+}
+
+function renderHistCalendar(){
+  const el=document.getElementById('hist-calendar');
+  if(!el)return;
+  if(histView==='year')el.innerHTML=renderYearCal();
+  else if(histView==='month')el.innerHTML=renderMonthCal();
+  else if(histView==='week')el.innerHTML=renderWeekCal();
+  else el.innerHTML=renderDayCal();
+}
+
+// Helper: get day stats
+function getDayStats(dateStr){
+  // dateStr: 'YYYY-MM-DD'
+  const sales=DB.sales.filter(s=>new Date(s.date).toISOString().slice(0,10)===dateStr);
+  const rev=sales.reduce((a,s)=>a+s.total,0);
+  const profit=sales.reduce((a,s)=>a+s.profit,0);
+  const txns=sales.length;
+  return{sales,rev,profit,txns};
+}
+
+function getMonthStats(year,month){
+  const sales=DB.sales.filter(s=>{const d=new Date(s.date);return d.getFullYear()===year&&d.getMonth()===month;});
+  return{sales,rev:sales.reduce((a,s)=>a+s.total,0),profit:sales.reduce((a,s)=>a+s.profit,0),txns:sales.length};
+}
+
+// Render day revenue for coloring
+function dayRevMap(){
+  const map={};
+  DB.sales.forEach(s=>{
+    const k=new Date(s.date).toISOString().slice(0,10);
+    map[k]=(map[k]||0)+s.total;
+  });
+  return map;
+}
+
+function renderYearCal(){
+  const now=new Date();
+  const revm=dayRevMap();
+  let html=`<div class="cal-nav">
+    <button onclick="histYear--;renderHistCalendar()">◀</button>
+    <div class="cal-title">${histYear}</div>
+    <button onclick="histYear++;renderHistCalendar()">▶</button>
+  </div><div class="year-grid">`;
+  for(let m=0;m<12;m++){
+    const st=getMonthStats(histYear,m);
+    const isCur=now.getFullYear()===histYear&&now.getMonth()===m;
+    const isSel=histView==='month'&&histYear===histYear&&histMonth===m;
+    html+=`<div class="month-cell ${st.txns>0?'has-sales':''} ${isCur?'current':''} ${isSel?'selected':''}" onclick="histMonth=${m};histView='month';renderHistory()">
+      <div class="mc-name">${MON_NAMES[m]}</div>
+      ${st.rev>0?`<div class="mc-rev">${fmtK(st.rev)}</div><div class="mc-txn">${st.txns} txns</div>`:`<div class="mc-txn" style="margin-top:3px">—</div>`}
+    </div>`;
+  }
+  html+='</div>';
+  // Year summary
+  const yStats=getMonthStats_range(new Date(histYear,0,1).getTime(),new Date(histYear+1,0,1).getTime());
+  if(yStats.txns>0){
+    html+=`<div class="card" style="margin-top:10px">
+      <div class="st">📊 ${histYear} Summary</div>
+      <div class="sg">
+        <div class="sc"><div class="sl">Total Revenue</div><div class="sv" style="color:var(--green)">${fmtK(yStats.rev)}</div></div>
+        <div class="sc"><div class="sl">Gross Profit</div><div class="sv" style="color:var(--blue)">${fmtK(yStats.profit)}</div></div>
+        <div class="sc"><div class="sl">Transactions</div><div class="sv">${yStats.txns}</div></div>
+        <div class="sc"><div class="sl">Avg/Day</div><div class="sv" style="font-size:13px">${fmtK(yStats.rev/365)}</div></div>
+      </div>
+    </div>`;
+  }
+  return html;
+}
+
+function getMonthStats_range(from,to){
+  const sales=DB.sales.filter(s=>s.date>=from&&s.date<to);
+  return{sales,rev:sales.reduce((a,s)=>a+s.total,0),profit:sales.reduce((a,s)=>a+s.profit,0),txns:sales.length};
+}
+
+function renderMonthCal(){
+  const now=new Date();
+  const todayStr2=now.toISOString().slice(0,10);
+  const revm=dayRevMap();
+  // All values for intensity scaling
+  const daysInMonth=new Date(histYear,histMonth+1,0).getDate();
+  const dayVals=Array.from({length:daysInMonth},(_,i)=>{
+    const k=`${histYear}-${String(histMonth+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;
+    return revm[k]||0;
+  });
+  const maxDay=Math.max(...dayVals,1);
+
+  let html=`<div class="cal-nav">
+    <button onclick="if(histMonth===0){histMonth=11;histYear--;}else histMonth--;renderHistCalendar()">◀</button>
+    <div class="cal-title">${MON_NAMES[histMonth]} ${histYear}</div>
+    <button onclick="if(histMonth===11){histMonth=0;histYear++;}else histMonth++;renderHistCalendar()">▶</button>
+  </div>
+  <div class="cal-grid">
+    ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div class="cal-dow">${d}</div>`).join('')}`;
+
+  const firstDay=new Date(histYear,histMonth,1).getDay();
+  for(let i=0;i<firstDay;i++)html+=`<div class="cal-day empty"></div>`;
+
+  for(let d=1;d<=daysInMonth;d++){
+    const k=`${histYear}-${String(histMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const rev=revm[k]||0;
+    const isToday=k===todayStr2;
+    const isSel=histDay===k;
+    const intensity=rev>0?Math.round(30+((rev/maxDay)*70)):0;
+    html+=`<div class="cal-day ${rev>0?'has-sales':''} ${isToday?'today':''} ${isSel?'selected':''}" 
+      style="${rev>0?`background:rgba(16,185,129,${(0.05+(rev/maxDay)*0.3).toFixed(2)})`:''};"
+      onclick="histDay='${k}';renderHistCalendar();showDayStats('${k}')">
+      <div class="cal-dn">${d}</div>
+      ${rev>0?`<div class="cal-rev">${fmtK(rev)}</div>`:`<div class="cal-dot" style="opacity:0"></div>`}
+    </div>`;
+  }
+  html+='</div>';
+
+  // Month summary bar
+  const ms=getMonthStats(histYear,histMonth);
+  if(ms.txns>0){
+    html+=`<div class="card" style="margin-top:10px">
+      <div class="st">📊 ${MON_NAMES[histMonth]} ${histYear}</div>
+      <div class="sg">
+        <div class="sc"><div class="sl">Revenue</div><div class="sv" style="color:var(--green)">${fmtK(ms.rev)}</div></div>
+        <div class="sc"><div class="sl">Profit</div><div class="sv" style="color:var(--blue)">${fmtK(ms.profit)}</div></div>
+        <div class="sc"><div class="sl">Transactions</div><div class="sv">${ms.txns}</div></div>
+        <div class="sc"><div class="sl">Avg/Day</div><div class="sv" style="font-size:13px">${fmtK(ms.rev/daysInMonth)}</div></div>
+      </div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderWeekCal(){
+  const now=new Date();
+  const todayStr2=now.toISOString().slice(0,10);
+  const revm=dayRevMap();
+  // Default week start = start of current week (Sunday)
+  if(!histWeekStart){
+    histWeekStart=new Date(now);
+    histWeekStart.setDate(now.getDate()-now.getDay());
+    histWeekStart.setHours(0,0,0,0);
+  }
+  const ws=new Date(histWeekStart);
+  const we=new Date(ws);we.setDate(we.getDate()+6);
+  const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const days=Array.from({length:7},(_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d;});
+  const dayVals=days.map(d=>revm[d.toISOString().slice(0,10)]||0);
+  const maxDayVal=Math.max(...dayVals,1);
+
+  let html=`<div class="cal-nav">
+    <button onclick="histWeekStart=new Date(histWeekStart);histWeekStart.setDate(histWeekStart.getDate()-7);renderHistCalendar()">◀</button>
+    <div class="cal-title" style="font-size:12px">${ws.toLocaleDateString('en',{month:'short',day:'numeric'})} – ${we.toLocaleDateString('en',{month:'short',day:'numeric',year:'numeric'})}</div>
+    <button onclick="histWeekStart=new Date(histWeekStart);histWeekStart.setDate(histWeekStart.getDate()+7);renderHistCalendar()">▶</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:6px">
+    ${days.map((d,i)=>{
+      const k=d.toISOString().slice(0,10);
+      const rev=revm[k]||0;
+      const isToday=k===todayStr2;
+      const isSel=histDay===k;
+      return`<div class="week-cell ${rev>0?'has-sales':''} ${isToday?'today':''} ${isSel?'selected':''}"
+        style="${rev>0?`background:rgba(16,185,129,${(0.05+(rev/maxDayVal)*0.3).toFixed(2)});border-color:rgba(16,185,129,.4)`:''}"
+        onclick="histDay='${k}';renderHistCalendar();showDayStats('${k}')">
+        <div style="font-size:9px;color:var(--faint);font-weight:600">${dayNames[i]}</div>
+        <div style="font-size:13px;font-weight:800;color:${isToday?'var(--blue)':'var(--text)'};margin:2px 0">${d.getDate()}</div>
+        ${rev>0?`<div style="font-size:8px;font-weight:700;color:var(--green)">${fmtK(rev)}</div>`:`<div style="font-size:8px;color:var(--faint)">—</div>`}
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  // Week totals
+  const wRev=dayVals.reduce((a,v)=>a+v,0);
+  const wStats=getMonthStats_range(ws.getTime(),we.getTime()+86400000);
+  if(wStats.txns>0){
+    html+=`<div class="card">
+      <div class="st">📊 Week Summary</div>
+      <div class="sg">
+        <div class="sc"><div class="sl">Revenue</div><div class="sv" style="color:var(--green)">${fmtK(wStats.rev)}</div></div>
+        <div class="sc"><div class="sl">Profit</div><div class="sv" style="color:var(--blue)">${fmtK(wStats.profit)}</div></div>
+        <div class="sc"><div class="sl">Transactions</div><div class="sv">${wStats.txns}</div></div>
+        <div class="sc"><div class="sl">Best Day</div><div class="sv" style="font-size:11px">${(()=>{const bi=dayVals.indexOf(Math.max(...dayVals));return dayNames[bi];})()}</div></div>
+      </div>
+    </div>`;
+    html+=`<div class="card">
+      <div class="st">📊 Daily Breakdown</div>
+      ${barChart(days.map(d=>d.getDate()+''),dayVals,'var(--green)',90)}
+    </div>`;
+  }
+  return html;
+}
+
+function renderDayCal(){
+  const now=new Date();
+  const todayStr2=now.toISOString().slice(0,10);
+  if(!histDay)histDay=todayStr2;
+  // Show a day picker + stats immediately
+  const d=new Date(histDay+'T00:00:00');
+  let html=`<div class="cal-nav">
+    <button onclick="const _d=new Date(histDay+'T00:00:00');_d.setDate(_d.getDate()-1);histDay=_d.toISOString().slice(0,10);renderHistCalendar();showDayStats(histDay)">◀</button>
+    <div class="cal-title">${d.toLocaleDateString('en',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
+    <button onclick="const _d=new Date(histDay+'T00:00:00');_d.setDate(_d.getDate()+1);histDay=_d.toISOString().slice(0,10);renderHistCalendar();showDayStats(histDay)">▶</button>
+  </div>`;
+  return html;
+}
+
+function showDayStats(dateStr){
+  histDay=dateStr;
+  const el=document.getElementById('hist-day-stats');
+  if(!el)return;
+  const {sales,rev,profit,txns}=getDayStats(dateStr);
+  const d=new Date(dateStr+'T00:00:00');
+  const dateLabel2=d.toLocaleDateString('en',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+
+  if(txns===0){
+    el.innerHTML=`<div class="card" style="margin-top:8px;text-align:center;padding:24px">
+      <div style="font-size:28px;margin-bottom:8px">📭</div>
+      <div style="font-size:14px;font-weight:700;color:var(--muted)">${dateLabel2}</div>
+      <div style="font-size:12px;color:var(--faint);margin-top:4px">No sales recorded this day</div>
+    </div>`;
+    return;
+  }
+
+  // Product breakdown
+  const prodMap={};
+  sales.forEach(s=>{
+    if(!prodMap[s.productId])prodMap[s.productId]={name:s.productName,qty:0,rev:0,profit:0,refunds:0};
+    if(s.isRefund){prodMap[s.productId].refunds+=Math.abs(s.total);}
+    else{prodMap[s.productId].qty+=s.qty;prodMap[s.productId].rev+=s.total;prodMap[s.productId].profit+=s.profit;}
+  });
+  const prodArr=Object.values(prodMap).sort((a,b)=>b.rev-a.rev);
+
+  // Payment breakdown
+  const payMap={};
+  sales.filter(s=>!s.isRefund).forEach(s=>{payMap[s.payment]=(payMap[s.payment]||0)+s.total;});
+
+  // Hourly breakdown
+  const hourMap={};
+  sales.filter(s=>!s.isRefund).forEach(s=>{hourMap[s.hour||0]=(hourMap[s.hour||0]||0)+s.total;});
+  const hourLabels=Object.keys(hourMap).sort((a,b)=>+a-+b).map(h=>`${h}h`);
+  const hourVals=Object.keys(hourMap).sort((a,b)=>+a-+b).map(h=>hourMap[h]);
+
+  const refundTotal=sales.filter(s=>s.isRefund).reduce((a,s)=>a+Math.abs(s.total),0);
+  const margin=rev>0?Math.round((profit/rev)*100):0;
+
+  el.innerHTML=`
+  <div class="card" style="margin-top:8px;background:linear-gradient(135deg,#0a1628,#0d2137)">
+    <div style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:6px">📅 ${dateLabel2}</div>
+    <div class="sg">
+      <div class="sc"><div class="sl">Revenue</div><div class="sv" style="color:var(--green)">${fmt(rev)}</div><div class="ss">${txns} transactions</div></div>
+      <div class="sc"><div class="sl">Gross Profit</div><div class="sv" style="color:var(--blue)">${fmt(profit)}</div><div class="ss">${margin}% margin</div></div>
+      <div class="sc"><div class="sl">Items Sold</div><div class="sv">${sales.filter(s=>!s.isRefund).reduce((a,s)=>a+s.qty,0)}</div><div class="ss">units</div></div>
+      <div class="sc"><div class="sl">Avg Txn</div><div class="sv" style="font-size:13px">${txns>0?fmt(rev/txns):'—'}</div><div class="ss">per sale</div></div>
+    </div>
+    ${refundTotal>0?`<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:7px 10px;font-size:11px;color:var(--red);margin-top:8px">↩️ Refunds: ${fmt(refundTotal)}</div>`:''}
+  </div>
+
+  ${prodArr.length?`<div class="card" style="margin-top:8px">
+    <div class="st">📦 Products Sold</div>
+    ${prodArr.map((p,i)=>`<div class="dr" style="display:flex;justify-content:space-between;align-items:center">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600">${p.name}</div>
+        <div style="font-size:10px;color:var(--faint)">${p.qty} pcs • Profit: ${fmt(p.profit)}${p.refunds>0?` • Refund: ${fmt(p.refunds)}`:''}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:12px;font-weight:700;color:var(--green)">${fmt(p.rev)}</div>
+        <div style="font-size:9px;color:var(--faint)">${p.rev>0?Math.round((p.profit/p.rev)*100):0}% margin</div>
+      </div>
+    </div>`).join('')}
+  </div>`:''}
+
+  ${Object.keys(payMap).length?`<div class="card" style="margin-top:8px">
+    <div class="st">💳 Payment Methods</div>
+    ${Object.entries(payMap).sort((a,b)=>b[1]-a[1]).map(([m,v])=>`<div class="dr" style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12px;font-weight:600">${m}</span>
+      <span style="font-size:12px;font-weight:700;color:var(--blue)">${fmt(v)}</span>
+    </div>`).join('')}
+  </div>`:''}
+
+  ${hourLabels.length>1?`<div class="card" style="margin-top:8px">
+    <div class="st">⏰ Hourly Sales</div>
+    ${barChart(hourLabels,hourVals,'var(--purple)',80)}
+  </div>`:''}
+
+  <div class="card" style="margin-top:8px">
+    <div class="st">🧾 All Transactions <span style="font-size:10px;font-weight:400;color:var(--muted)">${sales.length} records</span></div>
+    ${sales.slice().sort((a,b)=>a.date-b.date).map(s=>`
+    <div class="dr" style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;${s.isRefund?'color:var(--red)':''}">${s.productName}${s.isRefund?' ↩️ REFUND':''}</div>
+        <div style="font-size:10px;color:var(--faint)">${new Date(s.date).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})} • ${s.qty} pcs • ${fmt(s.costPrice)}→${fmt(s.soldPrice||s.sellingPrice||0)} • ${s.payment}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:12px;font-weight:700;color:${s.isRefund?'var(--red)':'var(--green)'}">${s.isRefund?'-':''}${fmt(Math.abs(s.total))}</div>
+        <div style="font-size:9px;color:${s.profit>=0?'var(--green)':'var(--red)'}">P: ${s.isRefund?'-':''}${fmt(Math.abs(s.profit))}</div>
+      </div>
+    </div>`).join('')}
+  </div>`;
 }
 
 // ═══════════════════════════════════════════════════════════
